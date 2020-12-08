@@ -1145,6 +1145,7 @@ dependencies = [
  "clap",
  "futures 0.3.8",
  "hex",
+ "log",
  "secp256k1",
  "tokio 0.2.23",
  "web3",

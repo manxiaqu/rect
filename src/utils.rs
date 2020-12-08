@@ -1,4 +1,6 @@
+use core::str::FromStr;
 use hex;
+use web3::types::U256;
 
 /// remove hex prefix `0x` or `0X` in string
 pub fn strip_hex_prefix(ori: &str) -> String {
@@ -9,18 +11,16 @@ pub fn strip_hex_prefix(ori: &str) -> String {
     ori.to_string()
 }
 
-/// check a hex string is private key or not(only 32 bytes allowed)
-pub fn validate_private_key(val: &str) -> Result<(), String> {
-    validate_hex_of_len(&val, 32).map_err(|err| format!("invalid private key: {:?}", err))?;
+/// convert str to u256
+///
+/// the str can be number 100 or hex format 0x100
+pub fn str_to_u256(v: &str) -> Option<U256> {
+    if v.starts_with("0x") || v.starts_with("0X") {
+        return U256::from_str(&strip_hex_prefix(v)).ok();
+    }
 
-    Ok(())
-}
-
-/// check a hex string is address or not
-pub fn validate_address(val: &str) -> Result<(), String> {
-    validate_hex_of_len(&val, 20).map_err(|err| format!("invalid address: {:?}", err))?;
-
-    Ok(())
+    // treat as a number
+    v.parse::<u128>().map(|n| n.into()).ok()
 }
 
 /// validate hex string with expect bytes length
@@ -44,6 +44,20 @@ fn validate_hex_of_len(val: &str, len: usize) -> Result<(), String> {
 
     Ok(())
 }
+
+macro_rules! create_hex_validator {
+    ($fn_name: ident, $len: expr, $msg: literal) => {
+        pub fn $fn_name(val: &str) -> Result<(), String> {
+            validate_hex_of_len(&val, $len).map_err(|err| format!("{}: {:?}", $msg, err))?;
+
+            Ok(())
+        }
+    };
+}
+
+create_hex_validator!(validate_private_key, 32, "invalid private key");
+create_hex_validator!(validate_address, 20, "invalid address");
+create_hex_validator!(validate_hash, 32, "invalid hash");
 
 #[cfg(test)]
 mod tests {

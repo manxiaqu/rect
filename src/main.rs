@@ -1,10 +1,10 @@
+mod args;
 mod params;
 pub mod tx;
 mod utils;
-use clap::{App, Arg};
-use core::str::FromStr;
-use secp256k1::SecretKey;
-use web3::types::{Address, TransactionParameters, U256};
+use args::Arg as TraitArg;
+use clap::App;
+use web3::types::{Bytes, TransactionParameters, U256};
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
@@ -12,53 +12,28 @@ async fn main() -> Result<(), ()> {
         .about("Cmd tool interact with ethereum")
         .version("0.1.0")
         .author("manxiaqu")
-        .arg(
-            Arg::new("rpc")
-                .about("Url of ethereum rpc node")
-                .default_value(params::RPC_LOCAL)
-                .long("rpc")
-                .value_name("rpc")
-                .global(true),
-        )
+        .arg(args::RPCArg::new())
         .subcommand(
             App::new("tx")
                 .about("send tx")
-                .arg(
-                    Arg::new("priv")
-                        .about("The private key used to send transaction")
-                        .long("priv")
-                        .value_name("priv")
-                        .validator(utils::validate_private_key),
-                )
-                .arg(
-                    Arg::new("to")
-                        .about("Receiver address")
-                        .long("to")
-                        .value_name("to")
-                        .validator(utils::validate_address),
-                )
-                .arg(
-                    Arg::new("value")
-                        .about("Amount sent to receiver")
-                        .long("value")
-                        .value_name("value"),
-                ),
+                .arg(args::PrivateKeyArg::new())
+                .arg(args::ReceiverArg::new())
+                .arg(args::ValueArg::new())
+                .arg(args::DataArg::new())
+                .arg(args::GasArg::new()),
         )
         .get_matches();
     match matches.subcommand() {
         Some(("tx", tx_matches)) => {
-            let rpc_url = tx_matches.value_of("rpc").unwrap();
-            let privatekey = utils::strip_hex_prefix(tx_matches.value_of("priv").unwrap());
-            let to = utils::strip_hex_prefix(tx_matches.value_of("to").unwrap());
-            let value = tx_matches.value_of("value").unwrap();
-
-            let transport = web3::transports::Http::new(rpc_url).unwrap();
+            let transport = args::RPCArg::parse_get(&tx_matches).unwrap();
             let tx_manager = tx::Tx::new(web3::Web3::new(transport));
 
-            let secret_key = SecretKey::from_str(&privatekey).unwrap();
+            let secret_key = args::PrivateKeyArg::parse_get(&tx_matches).unwrap();
             let tx = TransactionParameters {
-                to: Some(Address::from_str(&to).unwrap()),
-                value: U256::from_str(value).unwrap(),
+                to: args::ReceiverArg::parse_get(&tx_matches),
+                value: args::ValueArg::parse_get(&tx_matches).unwrap_or(U256::default()),
+                gas: args::GasArg::parse_get(&tx_matches).unwrap_or(100000u64.into()),
+                data: args::DataArg::parse_get(&tx_matches).unwrap_or(Bytes::default()),
                 ..TransactionParameters::default()
             };
             tx_manager
