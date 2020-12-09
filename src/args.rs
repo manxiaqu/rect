@@ -1,3 +1,4 @@
+use crate::errors::Error;
 use crate::params;
 use crate::utils;
 use clap::{Arg as ClapArg, ArgMatches};
@@ -12,7 +13,7 @@ pub trait Arg<'help> {
 
     fn new() -> ClapArg<'help>;
 
-    fn parse_get(matches: &ArgMatches) -> Option<Self::Out>;
+    fn parse_get(matches: &ArgMatches) -> Result<Self::Out, Error>;
 }
 
 macro_rules! create_arg {
@@ -26,7 +27,7 @@ macro_rules! create_arg {
                 $init
             }
 
-            fn parse_get(matches: &ArgMatches) -> Option<Self::Out> {
+            fn parse_get(matches: &ArgMatches) -> Result<Self::Out, Error> {
                 $get(matches)
             }
         }
@@ -42,9 +43,8 @@ create_arg!(
         .long("rpc")
         .value_name("rpc")
         .global(true),
-    |ms: &ArgMatches| ms
-        .value_of("rpc")
-        .map(|v| web3::transports::Http::new(v).unwrap())
+    |ms: &ArgMatches| web3::transports::Http::new(ms.value_of("rpc").unwrap())
+        .map_err(|err| err.into())
 );
 
 create_arg!(
@@ -56,9 +56,12 @@ create_arg!(
         .value_name("to")
         .validator(utils::validate_address),
     |ms: &ArgMatches| {
-        ms.value_of("to")
-            .map(|k| utils::strip_hex_prefix(k))
-            .map(|v| Address::from_str(&v).unwrap())
+        if let Some(to) = ms.value_of("to") {
+            let to = utils::strip_hex_prefix(to);
+            Ok(Address::from_str(&to).unwrap())
+        } else {
+            return Ok(Address::default());
+        }
     }
 );
 
@@ -74,6 +77,7 @@ create_arg!(
         ms.value_of("priv")
             .map(|k| utils::strip_hex_prefix(k))
             .map(|s| SecretKey::from_str(&s).unwrap())
+            .ok_or(Error::Unexpected)
     }
 );
 
@@ -84,7 +88,14 @@ create_arg!(
         .about("Value sent to receiver")
         .long("value")
         .value_name("value"),
-    |ms: &ArgMatches| ms.value_of("value").map(|v| utils::str_to_u256(v).unwrap())
+    |ms: &ArgMatches| {
+        if let Some(v) = ms.value_of("value") {
+            return utils::str_to_u256(&v)
+                .map_err(|err| Error::InvalidValue(v.into(), "value".into(), err));
+        } else {
+            return Ok(U256::default());
+        }
+    }
 );
 
 create_arg!(
@@ -95,18 +106,23 @@ create_arg!(
         .long("data")
         .value_name("data"),
     |ms: &ArgMatches| {
-        log::debug!("data is {:?}", ms.value_of("data"));
         // if it's a hex string, then decode it
-        ms.value_of("data").map(|s| {
-            if s.starts_with("0x") || s.starts_with("0X") {
-                if let Some(hex_data) = hex::decode(utils::strip_hex_prefix(s)).ok() {
-                    return Bytes::from(hex_data);
+        if let Some(data) = ms.value_of("data") {
+            if data.starts_with("0x") || data.starts_with("0X") {
+                if let Some(hex_data) = hex::decode(utils::strip_hex_prefix(data)).ok() {
+                    return Ok(Bytes::from(hex_data));
+                } else {
+                    return Err(Error::InvalidValue(
+                        format!("hex string({:?})", data),
+                        "data".into(),
+                        "Invalid hex string".into(),
+                    ));
                 }
             }
+        }
 
-            // use original data
-            Bytes::from(s)
-        })
+        // use original data
+        Ok(vec![].into())
     }
 );
 
@@ -117,5 +133,12 @@ create_arg!(
         .about("gas limit used for tx(optional)")
         .long("gas")
         .value_name("gas"),
-    |ms: &ArgMatches| ms.value_of("gas").map(|v| utils::str_to_u256(v).unwrap())
+    |ms: &ArgMatches| {
+        if let Some(gas) = ms.value_of("gas") {
+            return utils::str_to_u256(gas)
+                .map_err(|e| Error::InvalidValue(gas.into(), "gas".into(), e));
+        } else {
+            return Ok(100000u64.into());
+        }
+    }
 );

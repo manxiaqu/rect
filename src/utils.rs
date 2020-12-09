@@ -14,13 +14,15 @@ pub fn strip_hex_prefix(ori: &str) -> String {
 /// convert str to u256
 ///
 /// the str can be number 100 or hex format 0x100
-pub fn str_to_u256(v: &str) -> Option<U256> {
+pub fn str_to_u256(v: &str) -> Result<U256, String> {
     if v.starts_with("0x") || v.starts_with("0X") {
-        return U256::from_str(&strip_hex_prefix(v)).ok();
+        return U256::from_str(&strip_hex_prefix(v)).map_err(|err| format!("{:?}", err));
     }
 
     // treat as a number
-    v.parse::<u128>().map(|n| n.into()).ok()
+    Ok(v.parse::<u128>()
+        .map_err(|err| format!("{:?}", err))?
+        .into())
 }
 
 /// validate hex string with expect bytes length
@@ -57,7 +59,7 @@ macro_rules! create_hex_validator {
 
 create_hex_validator!(validate_private_key, 32, "invalid private key");
 create_hex_validator!(validate_address, 20, "invalid address");
-create_hex_validator!(validate_hash, 32, "invalid hash");
+// create_hex_validator!(validate_hash, 32, "invalid hash");
 
 #[cfg(test)]
 mod tests {

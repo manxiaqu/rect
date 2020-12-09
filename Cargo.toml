@@ -13,7 +13,7 @@ futures = "0.3.5"
 clap = "3.0.0-beta.2"
 hex = "0.4.2"
 log = "0.4.6"
-
+derive_more = "0.99.11"
 
 [dev-dependencies]
 tokio = { version = "0.2", features = ["full"] }
