@@ -22,7 +22,7 @@ async fn main() -> Result<(), ()> {
         Some(("tx", tx_matches)) => {
             let r = cmd::SendTxCmd::run(&tx_matches);
             if r.is_err() {
-                log::error!("send tx failed: {:?}", r.unwrap_err());
+                println!("send tx failed: {}", r.unwrap_err());
             }
         }
         // print help instead
